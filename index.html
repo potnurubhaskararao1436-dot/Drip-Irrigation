@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Smart Irrigation System - 3D Simulation</title>
+    <meta name="description" content="Automatic Soil Moisture Based Drip Irrigation system simulation powered by ESP32 micro-controller and Three.js 3D WebGL visuals.">
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=VT323&display=swap" rel="stylesheet">
+    
+    <!-- External Libraries: Three.js, OrbitControls, Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div id="app-container">
+        <!-- TOP HEADER BAR -->
+        <header id="main-header">
+            <div class="header-left">
+                <div class="logo-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v6m0 4v10M4.93 10.93l4.24 4.24M14.83 15.17l4.24-4.24M2 18h20M7 22h10" />
+                        <circle cx="12" cy="10" r="3" />
+                    </svg>
+                </div>
+                <div class="header-titles">
+                    <h1>ESP32 Smart Irrigation System</h1>
+                    <h2>3D Simulation &bull; Automatic Soil Moisture Based Drip Irrigation</h2>
+                </div>
+            </div>
+            
+            <div class="header-right">
+                <div class="status-badge" id="esp32-status-badge">
+                    <span class="pulse-dot online"></span>
+                    <span class="badge-text">ESP32: ONLINE</span>
+                </div>
+                <div class="status-badge mode-badge" id="mode-badge">
+                    <span class="badge-label">MODE:</span>
+                    <span class="badge-val" id="mode-val">AUTO</span>
+                </div>
+                <div class="status-badge pump-badge" id="pump-badge">
+                    <span class="badge-label">PUMP:</span>
+                    <span class="badge-val off" id="pump-val">OFF</span>
+                </div>
+                <div class="safety-banner">
+                    <span class="shield-icon">&#x1F6E1;</span>
+                    <span>SIMULATION ONLY</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN LAYOUT GRID -->
+        <main id="main-content">
+            <!-- LEFT / CENTER: 3D VIEWPORT CONTAINER -->
+            <section id="viewport-section">
+                <!-- 3D Canvas -->
+                <div id="canvas-container">
+                    <!-- Overlay Canvas for labels or warnings -->
+                    <div id="canvas-overlay">
+                        <!-- Camera Preset Controls -->
+                        <div id="camera-toolbar">
+                            <button class="cam-btn active" id="btn-cam-reset" title="Default Perspective View">
+                                <span>&#x1F441;</span> Reset View
+                            </button>
+                            <button class="cam-btn" id="btn-cam-farm" title="Focus on Farm & Plants">
+                                <span>&#x1F33F;</span> Farm View
+                            </button>
+                            <button class="cam-btn" id="btn-cam-circuit" title="Focus on Electronics Panel">
+                                <span>&#x1F5A5;</span> Circuit View
+                            </button>
+                            <button class="cam-btn" id="btn-cam-top" title="Top-down Aerial View">
+                                <span>&#x21A5;</span> Top View
+                            </button>
+                        </div>
+
+                        <!-- System Alerts / Warnings -->
+                        <div id="system-alert-banner" class="alert-hidden">
+                            <span class="alert-icon">&#x26A0;</span>
+                            <span id="alert-text">LOW WATER LEVEL - PUMP OFF</span>
+                        </div>
+
+                        <!-- Demo Running Banner -->
+                        <div id="demo-banner" class="demo-hidden">
+                            <div class="demo-header">
+                                <span class="pulse-dot demo-dot"></span>
+                                <strong>DEMONSTRATION SCENARIO IN PROGRESS</strong>
+                            </div>
+                            <div id="demo-step-text">Initializing scenario...</div>
+                            <button id="btn-stop-demo">&times; Exit Demo</button>
+                        </div>
+
+                        <!-- Hover/Click Object Tooltip -->
+                        <div id="3d-tooltip" class="tooltip-hidden">
+                            <div id="tooltip-title">Component Name</div>
+                            <div id="tooltip-desc">Component description...</div>
+                            <div class="tooltip-hint">Click for full details</div>
+                        </div>
+
+                        <!-- Floating Live Status Overlay inside 3D -->
+                        <div id="hud-water-flow" class="hud-box">
+                            <span class="hud-label">Water Flow:</span>
+                            <span class="hud-value stopped" id="hud-flow-val">STOPPED</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOTTOM TABBED PANEL -->
+                <div id="bottom-panel">
+                    <div id="tab-nav">
+                        <button class="tab-btn active" data-tab="tab-graph">&#x1F4C8; Live Telemetry Graph</button>
+                        <button class="tab-btn" data-tab="tab-lcd">&#x1F5A5; 16x2 I2C LCD Screen</button>
+                        <button class="tab-btn" data-tab="tab-inspector">&#x1F50D; Component Inspector</button>
+                        <button class="tab-btn" data-tab="tab-workflow">&#x2699; How The System Works</button>
+                    </div>
+
+                    <div id="tab-contents">
+                        <!-- TAB 1: GRAPH -->
+                        <div class="tab-pane active" id="tab-graph">
+                            <div class="graph-container">
+                                <canvas id="telemetry-chart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- TAB 2: VIRTUAL 16x2 LCD DISPLAY -->
+                        <div class="tab-pane" id="tab-lcd">
+                            <div class="lcd-wrapper">
+                                <div class="lcd-bezel">
+                                    <div class="lcd-header">16x2 I2C Liquid Crystal Display (GPIO 21 SDA / GPIO 22 SCL)</div>
+                                    <div class="lcd-screen" id="virtual-lcd-screen">
+                                        <div class="lcd-line" id="lcd-line-1">Soil: 62%  T:28C</div>
+                                        <div class="lcd-line" id="lcd-line-2">Pump: OFF       </div>
+                                    </div>
+                                    <div class="lcd-footer">Address: 0x27 &bull; ESP32 I2C Interface</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 3: HARDWARE COMPONENT INSPECTOR -->
+                        <div class="tab-pane" id="tab-inspector">
+                            <div id="inspector-content">
+                                <div class="inspector-empty" id="inspector-placeholder">
+                                    <span class="info-icon">&#x1F446;</span>
+                                    <p>Click on any 3D object in the farm or electronics panel to inspect its electrical connections, specs, and pin configuration.</p>
+                                </div>
+                                <div class="inspector-card hidden" id="inspector-card">
+                                    <h3 id="inspect-title">ESP32 Development Board</h3>
+                                    <span class="inspect-tag" id="inspect-tag">Microcontroller</span>
+                                    <p id="inspect-desc">Reads sensors and controls the relay module.</p>
+                                    <div class="inspect-details">
+                                        <div class="detail-row">
+                                            <span class="detail-label">Connections:</span>
+                                            <span class="detail-val" id="inspect-pins">GPIO 34, 4, 27, 26, 21, 22</span>
+                                        </div>
+                                        <div class="detail-row">
+                                            <span class="detail-label">Power Supply:</span>
+                                            <span class="detail-val" id="inspect-power">5V DC / GND</span>
+                                        </div>
+                                        <div class="detail-row">
+                                            <span class="detail-label">Current Role:</span>
+                                            <span class="detail-val" id="inspect-role">Executing core automatic irrigation algorithm</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 4: HOW THE SYSTEM WORKS -->
+                        <div class="tab-pane" id="tab-workflow">
+                            <div class="workflow-grid">
+                                <div class="wf-step"><span class="wf-num">1</span> <strong>Sensor Sensing:</strong> Soil Moisture Sensor measures soil volumetric water content in Plant 1.</div>
+                                <div class="wf-step"><span class="wf-num">2</span> <strong>Climate Check:</strong> DHT22 captures ambient temperature & humidity data.</div>
+                                <div class="wf-step"><span class="wf-num">3</span> <strong>Water Level:</strong> Tank depth sensor monitors water availability.</div>
+                                <div class="wf-step"><span class="wf-num">4</span> <strong>ESP32 Processing:</strong> ESP32 ADC reads GPIO 34 (Soil) and GPIO 27 (Level).</div>
+                                <div class="wf-step"><span class="wf-num">5</span> <strong>Algorithmic Decision:</strong> If Soil &lt; 40% AND Water &gt; 10%, GPIO 26 triggers LOW/HIGH to energize relay.</div>
+                                <div class="wf-step"><span class="wf-num">6</span> <strong>Relay Switching:</strong> Relay closes 12V DC power loop to the water pump with total electrical isolation.</div>
+                                <div class="wf-step"><span class="wf-num">7</span> <strong>Pumping Action:</strong> 12V pump pressurizes water through filter & main PVC pipe.</div>
+                                <div class="wf-step"><span class="wf-num">8</span> <strong>Drip Irrigation:</strong> Water flows through branch pipes to 4 micro-drip emitters directly to plant roots.</div>
+                                <div class="wf-step"><span class="wf-num">9</span> <strong>Soil Moisture Rise:</strong> Water infiltrates ground, raising soil moisture & restoring plant health.</div>
+                                <div class="wf-step"><span class="wf-num">10</span> <strong>Auto Cutoff:</strong> Once moisture reaches &ge; 40%, ESP32 de-energizes relay, stopping pump.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- RIGHT: CONTROL DASHBOARD PANEL -->
+            <aside id="dashboard-section">
+                <!-- PANEL 1: SYSTEM CONTROLS & MODE -->
+                <div class="card" id="card-controls">
+                    <div class="card-header">
+                        <h3><span class="icon">&#x1F39B;</span> System Control</h3>
+                    </div>
+                    <div class="card-body">
+                        <!-- AUTO / MANUAL Toggle -->
+                        <div class="control-row">
+                            <label>Control Mode:</label>
+                            <div class="toggle-group">
+                                <button class="mode-btn active" id="btn-mode-auto">AUTO</button>
+                                <button class="mode-btn" id="btn-mode-manual">MANUAL</button>
+                            </div>
+                        </div>
+
+                        <!-- MANUAL PUMP BUTTONS -->
+                        <div class="control-row manual-only disabled" id="manual-controls">
+                            <label>Manual Override:</label>
+                            <div class="btn-group">
+                                <button class="pump-ctrl-btn btn-on" id="btn-pump-on" disabled>PUMP ON</button>
+                                <button class="pump-ctrl-btn btn-off" id="btn-pump-off" disabled>PUMP OFF</button>
+                            </div>
+                        </div>
+
+                        <!-- LIVE STATE DISPLAY CARDS -->
+                        <div class="state-mini-grid">
+                            <div class="mini-state-card">
+                                <div class="mini-title">Relay State</div>
+                                <div class="mini-val off" id="relay-state-val">OFF (De-energized)</div>
+                            </div>
+                            <div class="mini-state-card">
+                                <div class="mini-title">Plant Health</div>
+                                <div class="mini-val healthy" id="plant-health-val">HEALTHY</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PANEL 2: SENSOR INPUT CONTROLS -->
+                <div class="card" id="card-sensors">
+                    <div class="card-header">
+                        <h3><span class="icon">&#x1F9EA;</span> Interactive Sensors</h3>
+                        <span class="card-subtitle">Adjust inputs in real time</span>
+                    </div>
+                    <div class="card-body">
+                        <!-- Soil Moisture Slider -->
+                        <div class="sensor-slider-block">
+                            <div class="slider-header">
+                                <span class="sensor-name">&#x1F331; Soil Moisture (GPIO 34)</span>
+                                <span class="sensor-val" id="val-soil">62%</span>
+                            </div>
+                            <input type="range" id="slider-soil" min="0" max="100" value="62" class="slider slider-soil">
+                            <div class="slider-labels">
+                                <span>0% (Bone Dry)</span>
+                                <span class="threshold-marker">40% Threshold</span>
+                                <span>100% (Wet)</span>
+                            </div>
+                        </div>
+
+                        <!-- Water Level Slider -->
+                        <div class="sensor-slider-block">
+                            <div class="slider-header">
+                                <span class="sensor-name">&#x1F4A7; Water Tank Level (GPIO 27)</span>
+                                <span class="sensor-val" id="val-water">80%</span>
+                            </div>
+                            <input type="range" id="slider-water" min="0" max="100" value="80" class="slider slider-water">
+                            <div class="slider-labels">
+                                <span>0% (Empty)</span>
+                                <span class="threshold-marker critical">10% Cutoff</span>
+                                <span>100% (Full)</span>
+                            </div>
+                        </div>
+
+                        <!-- Temperature Slider -->
+                        <div class="sensor-slider-block">
+                            <div class="slider-header">
+                                <span class="sensor-name">&#x1F321; Temperature (DHT22 GPIO 4)</span>
+                                <span class="sensor-val" id="val-temp">28°C</span>
+                            </div>
+                            <input type="range" id="slider-temp" min="10" max="50" value="28" class="slider slider-temp">
+                            <div class="slider-labels">
+                                <span>10°C</span>
+                                <span>28°C</span>
+                                <span>50°C</span>
+                            </div>
+                        </div>
+
+                        <!-- Humidity Slider -->
+                        <div class="sensor-slider-block">
+                            <div class="slider-header">
+                                <span class="sensor-name">&#x1F32B; Humidity (DHT22 GPIO 4)</span>
+                                <span class="sensor-val" id="val-hum">65%</span>
+                            </div>
+                            <input type="range" id="slider-hum" min="0" max="100" value="65" class="slider slider-hum">
+                            <div class="slider-labels">
+                                <span>0%</span>
+                                <span>65%</span>
+                                <span>100%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PANEL 3: PRESET SCENARIOS -->
+                <div class="card" id="card-scenarios">
+                    <div class="card-header">
+                        <h3><span class="icon">&#x26A1;</span> Scenario Presets & Demo</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="preset-grid">
+                            <button class="preset-btn" id="btn-preset-dry">
+                                <span class="preset-icon">&#x1F335;</span> Simulate Dry Soil (25%)
+                            </button>
+                            <button class="preset-btn warning" id="btn-preset-low-water">
+                                <span class="preset-icon">&#x26A0;</span> Simulate Low Water (5%)
+                            </button>
+                            <button class="preset-btn" id="btn-preset-normal">
+                                <span class="preset-icon">&#x1F33F;</span> Simulate Normal (65%)
+                            </button>
+                            <button class="preset-btn reset" id="btn-preset-reset">
+                                <span class="preset-icon">&#x21BB;</span> Reset All Values
+                            </button>
+                        </div>
+                        <button class="demo-run-btn" id="btn-run-demo">
+                            <span class="play-icon">&#x25B6;</span> RUN AUTOMATED DEMO SCENARIO
+                        </button>
+                    </div>
+                </div>
+
+                <!-- PANEL 4: DATA FLOW PIPELINE -->
+                <div class="card" id="card-pipeline">
+                    <div class="card-header">
+                        <h3><span class="icon">&#x1F50C;</span> Real-Time Data & Power Flow</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="pipeline-flow">
+                            <div class="pipe-node active" id="node-sensors">
+                                <div class="node-icon">&#x1F9EA;</div>
+                                <div class="node-name">Sensors</div>
+                                <div class="node-sub">Moisture/Level/DHT</div>
+                            </div>
+                            <div class="pipe-arrow">&rarr;</div>
+                            <div class="pipe-node active" id="node-esp32">
+                                <div class="node-icon">&#x1F4BB;</div>
+                                <div class="node-name">ESP32</div>
+                                <div class="node-sub">Decision Logic</div>
+                            </div>
+                            <div class="pipe-arrow">&rarr;</div>
+                            <div class="pipe-node" id="node-relay">
+                                <div class="node-icon">&#x1F50C;</div>
+                                <div class="node-name">5V Relay</div>
+                                <div class="node-sub">GPIO 26</div>
+                            </div>
+                            <div class="pipe-arrow">&rarr;</div>
+                            <div class="pipe-node" id="node-pump">
+                                <div class="node-icon">&#x2699;</div>
+                                <div class="node-name">12V Pump</div>
+                                <div class="node-sub">DC Motor</div>
+                            </div>
+                            <div class="pipe-arrow">&rarr;</div>
+                            <div class="pipe-node" id="node-irrigation">
+                                <div class="node-icon">&#x1F4A7;</div>
+                                <div class="node-name">Drip System</div>
+                                <div class="node-sub">Pipes & Emitters</div>
+                            </div>
+                            <div class="pipe-arrow">&rarr;</div>
+                            <div class="pipe-node" id="node-plants">
+                                <div class="node-icon">&#x1F33F;</div>
+                                <div class="node-name">Plants</div>
+                                <div class="node-sub">Soil & Roots</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <!-- FOOTER BAR -->
+        <footer id="main-footer">
+            <div class="footer-left">
+                <span>ESP32 Smart Irrigation System 3D Simulation &bull; Designed with Three.js WebGL & Vanilla JS</span>
+            </div>
+            <div class="footer-right">
+                <span class="note">This simulation demonstrates the logic and operation of the proposed ESP32 irrigation system.</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Application Script Modules -->
+    <script src="js/simulation.js"></script>
+    <script src="js/scene3d.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/demo.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
